@@ -1,0 +1,69 @@
+# =====================
+# ARQUIVOS SENSÍVEIS (NUNCA VERSIONAR!)
+# =====================
+conexao.php
+.env
+*.env
+
+# =====================
+# PASTAS DE UPLOAD E ARQUIVOS DE MÍDIA
+# =====================
+uploads/
+imgs/
+sounds/
+anima.html
+
+# =====================
+# ARQUIVOS DE LOG E TEMPORÁRIOS
+# =====================
+*.log
+*.tmp
+*.cache
+*.old
+*.bak
+*.orig
+
+# =====================
+# ARQUIVOS DO SISTEMA OPERACIONAL
+# =====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =====================
+# PASTAS DE IDE/EDITOR
+# =====================
+.vscode/
+.idea/
+*.sublime-*
+*.swp
+*.swo
+
+# =====================
+# ARQUIVOS DE DEPENDÊNCIAS (se usar Composer, NPM, etc.)
+# =====================
+vendor/
+node_modules/
+composer.lock
+package-lock.json
+
+# =====================
+# ARQUIVOS DE SESSÃO PHP (não versionar)
+# =====================
+sessions/
+*.sess
+
+# =====================
+# ARQUIVOS DE BACKUP DE BANCO DE DADOS (dumps)
+# =====================
+*.sql
+database.sql
+dump.sql
+
+# =====================
+# ARQUIVOS DE DEPLOY/CONFIGURAÇÃO LOCAL
+# =====================
+.ftpconfig
+.ftppass
+.htaccess
+.htpasswd
