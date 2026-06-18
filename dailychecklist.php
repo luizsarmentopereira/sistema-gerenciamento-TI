@@ -1,5 +1,6 @@
 <?php
 session_start();
+
 if (!isset($_SESSION['ID'])) {
     $_SESSION['ID'] = 1;
     $_SESSION['NOME'] = 'Admin';
@@ -10,58 +11,73 @@ if (!isset($_SESSION['ID'])) {
 include_once('conexao.php'); 
 
 $data_hoje = date('Y-m-d');
-$dia_semana_hoje = date('N');
-$dia_mes_hoje = date('j');
+$dia_semana_hoje = date('N'); // 1 a 7
+$dia_mes_hoje = date('j');    // 1 a 31
 
-// Virada de dia automática (corrigido para boolean)
-$check_dia = $conn->query("SELECT id FROM checklist_tarefas WHERE data_modificacao < '$data_hoje' LIMIT 1");
-if ($check_dia && $check_dia->rowCount() > 0) {
-    $conn->query("UPDATE checklist_tarefas SET concluida = false, data_modificacao = '$data_hoje'");
+// Virada de dia automática (reseta conclusões e limpa dados de quem concluiu)
+$stmt = $conn->prepare("SELECT id FROM checklist_tarefas WHERE data_modificacao < :hoje LIMIT 1");
+$stmt->execute(['hoje' => $data_hoje]);
+if ($stmt->rowCount() > 0) {
+    $stmt = $conn->prepare("UPDATE checklist_tarefas 
+                            SET concluida = false, 
+                                concluido_por = NULL, 
+                                concluido_em = NULL, 
+                                data_modificacao = :hoje");
+    $stmt->execute(['hoje' => $data_hoje]);
 }
 
-// Processamento AJAX
+// Processamento de Requisições AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     header('Content-Type: application/json');
     $action = $_GET['action'];
 
     if ($action === 'add') {
-        $text = isset($_POST['text']) ? $conn->quote(trim($_POST['text'])) : '';
-        $desc = isset($_POST['desc']) ? $conn->quote(trim($_POST['desc'])) : '';
-        $freq = isset($_POST['freq']) ? $conn->quote(trim($_POST['freq'])) : "'Diário'";
+        $text = isset($_POST['text']) ? trim($_POST['text']) : '';
+        $desc = isset($_POST['desc']) ? trim($_POST['desc']) : '';
+        $freq = isset($_POST['freq']) ? trim($_POST['freq']) : 'Diário';
         
-        $agendamento = "'todos'";
-        if ($freq === "'Semanal'" && isset($_POST['dia_semana'])) {
-            $agendamento = $conn->quote($_POST['dia_semana']);
-        } elseif ($freq === "'Mensal'" && isset($_POST['dia_mes'])) {
-            $agendamento = "'m-" . (int)$_POST['dia_mes'] . "'";
+        $agendamento = 'todos';
+        if ($freq === 'Semanal' && isset($_POST['dia_semana'])) {
+            $agendamento = $_POST['dia_semana'];
+        } elseif ($freq === 'Mensal' && isset($_POST['dia_mes'])) {
+            $agendamento = 'm-' . (int)$_POST['dia_mes'];
         }
 
-        $badge = "'badge-custom'";
-        if ($freq === "'Diário'") $badge = "'badge-daily'";
-        if ($freq === "'Semanal'") $badge = "'badge-weekly'";
+        $badge = 'badge-custom';
+        if ($freq === 'Diário') $badge = 'badge-daily';
+        if ($freq === 'Semanal') $badge = 'badge-weekly';
 
         if (!empty($text)) {
-            $res_ordem = $conn->query("SELECT MAX(ordem) as ultima FROM checklist_tarefas");
-            $row_ordem = $res_ordem->fetch(PDO::FETCH_ASSOC);
-            $nova_ordem = ((int)$row_ordem['ultima']) + 1;
+            $stmt = $conn->query("SELECT MAX(ordem) as ultima FROM checklist_tarefas");
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $nova_ordem = ((int)$row['ultima']) + 1;
 
             $sql = "INSERT INTO checklist_tarefas (texto, descricao, frequencia, agendamento, badge, concluida, ordem, data_modificacao) 
-                    VALUES ($text, $desc, $freq, $agendamento, $badge, false, $nova_ordem, '$data_hoje')";
-            
-            if ($conn->query($sql)) echo json_encode(['success' => true]);
-            else echo json_encode(['success' => false]);
+                    VALUES (:text, :desc, :freq, :agend, :badge, false, :ordem, :hoje)";
+            $stmt = $conn->prepare($sql);
+            $success = $stmt->execute([
+                'text' => $text,
+                'desc' => $desc,
+                'freq' => $freq,
+                'agend' => $agendamento,
+                'badge' => $badge,
+                'ordem' => $nova_ordem,
+                'hoje' => $data_hoje
+            ]);
+            echo json_encode(['success' => $success]);
         }
         exit();
     }
 
     if ($action === 'update') {
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-        $text = isset($_POST['text']) ? $conn->quote(trim($_POST['text'])) : '';
-        $desc = isset($_POST['desc']) ? $conn->quote(trim($_POST['desc'])) : '';
+        $text = isset($_POST['text']) ? trim($_POST['text']) : '';
+        $desc = isset($_POST['desc']) ? trim($_POST['desc']) : '';
         
         if ($id > 0 && !empty($text)) {
-            $sql = "UPDATE checklist_tarefas SET texto = $text, descricao = $desc WHERE id = $id";
-            echo json_encode(['success' => $conn->query($sql)]);
+            $stmt = $conn->prepare("UPDATE checklist_tarefas SET texto = :text, descricao = :desc WHERE id = :id");
+            $success = $stmt->execute(['text' => $text, 'desc' => $desc, 'id' => $id]);
+            echo json_encode(['success' => $success]);
         } else {
             echo json_encode(['success' => false, 'error' => 'Dados inválidos']);
         }
@@ -71,17 +87,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     if ($action === 'toggle') {
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
         $done = isset($_POST['done']) ? (int)$_POST['done'] : 0;
-        // PostgreSQL boolean: true/false
-        $done_value = $done ? 'true' : 'false';
-        $sql = "UPDATE checklist_tarefas SET concluida = $done_value, data_modificacao = '$data_hoje' WHERE id = $id";
-        echo json_encode(['success' => $conn->query($sql)]);
+        $usuario_id = $_SESSION['ID'];
+        
+        if ($done == 1) {
+            $stmt = $conn->prepare("UPDATE checklist_tarefas 
+                                    SET concluida = true, 
+                                        concluido_por = :usuario, 
+                                        concluido_em = CURRENT_TIMESTAMP 
+                                    WHERE id = :id");
+            $success = $stmt->execute(['usuario' => $usuario_id, 'id' => $id]);
+        } else {
+            $stmt = $conn->prepare("UPDATE checklist_tarefas 
+                                    SET concluida = false, 
+                                        concluido_por = NULL, 
+                                        concluido_em = NULL 
+                                    WHERE id = :id");
+            $success = $stmt->execute(['id' => $id]);
+        }
+        echo json_encode(['success' => $success]);
         exit();
     }
 
     if ($action === 'delete') {
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-        $sql = "DELETE FROM checklist_tarefas WHERE id = $id";
-        echo json_encode(['success' => $conn->query($sql)]);
+        $stmt = $conn->prepare("DELETE FROM checklist_tarefas WHERE id = :id");
+        $success = $stmt->execute(['id' => $id]);
+        echo json_encode(['success' => $success]);
         exit();
     }
 
@@ -91,7 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
             foreach ($ids as $index => $id) {
                 $id = (int)$id;
                 $ordem = $index + 1;
-                $conn->query("UPDATE checklist_tarefas SET ordem = $ordem WHERE id = $id");
+                $stmt = $conn->prepare("UPDATE checklist_tarefas SET ordem = :ordem WHERE id = :id");
+                $stmt->execute(['ordem' => $ordem, 'id' => $id]);
             }
             echo json_encode(['success' => true]);
         } else {
@@ -101,29 +133,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action'])) {
     }
 
     if ($action === 'reset_all') {
-        $sql = "UPDATE checklist_tarefas SET concluida = false, data_modificacao = '$data_hoje' 
-                WHERE agendamento = 'todos' OR agendamento = '$dia_semana_hoje' OR agendamento = 'm-$dia_mes_hoje'";
-        echo json_encode(['success' => $conn->query($sql)]);
+        $stmt = $conn->prepare("UPDATE checklist_tarefas 
+                                SET concluida = false, 
+                                    concluido_por = NULL, 
+                                    concluido_em = NULL, 
+                                    data_modificacao = :hoje 
+                                WHERE agendamento = 'todos' 
+                                   OR agendamento = :dia_semana 
+                                   OR agendamento = :agenda_mes");
+        $success = $stmt->execute([
+            'hoje' => $data_hoje,
+            'dia_semana' => $dia_semana_hoje,
+            'agenda_mes' => 'm-' . $dia_mes_hoje
+        ]);
+        echo json_encode(['success' => $success]);
         exit();
     }
 }
 
-// Lógica de Seleção das Tarefas
+// Lógica de Seleção das Tarefas (com JOIN para obter nome do usuário)
 $agenda_mes_alvo = 'm-' . $dia_mes_hoje;
 $query_completa = "
-    SELECT id, texto as text, descricao as desc, frequencia as freq, badge, concluida as done, agendamento
-    FROM checklist_tarefas 
-    ORDER BY ordem ASC
+    SELECT t.id, 
+           t.texto as text, 
+           t.descricao as desc, 
+           t.frequencia as freq, 
+           t.badge, 
+           t.concluida as done, 
+           t.agendamento,
+           t.concluido_por,
+           t.concluido_em,
+           u.nome as nome_usuario
+    FROM checklist_tarefas t
+    LEFT JOIN users u ON t.concluido_por = u.id
+    ORDER BY t.ordem ASC
 ";
 
 $tarefas_ativas = [];
 $tarefas_inativas = [];
 
-$result = $conn->query($query_completa);
-if ($result) {
-    while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
+$stmt = $conn->query($query_completa);
+if ($stmt) {
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $row['id'] = (int)$row['id'];
         $row['done'] = $row['done'] === 't' || $row['done'] === true || $row['done'] === 1;
+        $row['concluido_por'] = $row['concluido_por'] ? (int)$row['concluido_por'] : null;
+        $row['concluido_em'] = $row['concluido_em'];
+        $row['nome_usuario'] = $row['nome_usuario'] ?? null;
 
         $eh_de_hoje = ($row['agendamento'] === 'todos' || $row['agendamento'] == $dia_semana_hoje || $row['agendamento'] === $agenda_mes_alvo);
 
@@ -160,7 +216,6 @@ if ($result) {
         })();
     </script>
     <style>
-        /* Mantenha o mesmo CSS que você já tem (não alterei) */
         .card-gerenciador { border-radius: 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: none; }
         .card-header-gerenciador { background: linear-gradient(135deg, #0d6efd, rgb(108, 118, 121)); color: white; border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; padding: 1rem 1.5rem; }
         .sidebar { display: flex !important; flex-direction: column !important; height: 100vh !important; }
@@ -215,8 +270,21 @@ if ($result) {
 
         .form-check-input { cursor: pointer; transform: scale(1.2); margin-right: 12px; }
         .form-check-input:checked { background-color: #198754; border-color: #198754; }
-        .item-concluido .item-texto { text-decoration: line-through; color: #6c757d; opacity: 0.7; }
-        .item-concluido .item-descricao { text-decoration: line-through; opacity: 0.5; }
+        
+        /* CORREÇÃO: RISCO APENAS NO TÍTULO E DESCRIÇÃO, NÃO NO "FEITO POR" */
+        .item-concluido .txt-title { 
+            text-decoration: line-through; 
+            color: #6c757d; 
+            opacity: 0.7; 
+        }
+        .item-concluido .item-descricao { 
+            text-decoration: line-through; 
+            opacity: 0.5; 
+        }
+        .item-concluido .concluido-por {
+            text-decoration: none !important;
+            opacity: 1 !important;
+        }
         
         .btn-acao-item { opacity: 0; transition: all 0.2s; border: none; background: transparent; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
         .list-group-item:hover .btn-acao-item,
@@ -247,6 +315,24 @@ if ($result) {
         [data-theme="dark"] .divisor-turno::after { background: #121212; color: #a0aab2; }
 
         .edicao-input-box input, .edicao-input-box textarea { font-size: 0.85rem; padding: 4px 8px; }
+
+        /* Estilo para exibir quem concluiu (sem risco) */
+        .concluido-por {
+            font-size: 0.75rem;
+            color: #28a745;
+            font-weight: 600;
+            margin-left: 6px;
+            text-decoration: none !important;
+        }
+        .concluido-por i {
+            margin-right: 4px;
+        }
+        .concluido-por .hora {
+            font-weight: normal;
+            color: #6c757d;
+            font-size: 0.7rem;
+        }
+        [data-theme="dark"] .concluido-por .hora { color: #a0aab2; }
     </style>
 </head>
 <body>
@@ -254,7 +340,7 @@ if ($result) {
             <?php include 'menu.php'; ?>
             <div class="content p-4 w-100">
                 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-                    <h2><i class="fas fa-clipboard-check me-2"></i> Daily Checklist DTI</h2>
+                    <h2><i class="fas fa-clipboard-check me-2"></i> Checklist Diário - DTI</h2>
                 <div class="badge bg-secondary fs-6 p-2" id="current-date"><i class="far fa-calendar-alt me-2"></i><span></span></div>
             </div>
 
@@ -399,6 +485,17 @@ if ($result) {
                 
                 let descHtml = item.desc ? `<small class="text-muted d-block text-break item-descricao">${item.desc}</small>` : '';
 
+                // Monta a string de "Feito por" (sem risco)
+                let feitoPorHtml = '';
+                if (item.done && item.concluido_por && item.nome_usuario) {
+                    let hora = '';
+                    if (item.concluido_em) {
+                        const data = new Date(item.concluido_em);
+                        hora = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    feitoPorHtml = `<span class="concluido-por"><i class="fas fa-user-check"></i> Feito por ${item.nome_usuario} <span class="hora">${hora ? 'às ' + hora : ''}</span></span>`;
+                }
+
                 li.innerHTML = `
                     <div class="d-flex align-items-center flex-grow-1 item-head-container" id="body-container-${item.id}">
                         <div class="drag-handle"><i class="fas fa-grip-lines"></i></div>
@@ -406,6 +503,7 @@ if ($result) {
                         <div class="ms-2 flex-grow-1 data-content-box">
                             <label class="form-check-label item-texto fw-semibold d-block text-break" for="check-${item.id}">
                                 <span class="txt-title">${item.text}</span>
+                                ${feitoPorHtml}
                             </label>
                             ${descHtml}
                             <span class="badge ${item.badge} rounded-1" style="font-size: 0.65rem;">${item.freq}</span>
@@ -427,7 +525,7 @@ if ($result) {
                     formData.append('done', checkbox.checked ? 1 : 0);
 
                     fetch('dailychecklist.php?action=toggle', { method: 'POST', body: formData }).then(() => {
-                        item.done = checkbox.checked; render();
+                        buscarAtualizacoesSegundoPlano();
                     });
                 });
                 containerAtivas.appendChild(li);
@@ -480,13 +578,16 @@ if ($result) {
             .then(html => {
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
+                
                 const scripts = doc.querySelectorAll('script');
                 scripts.forEach(script => {
                     if (script.textContent.includes('let ativas =')) {
                         const regexAtivas = /let ativas = (\[.*?\]);/;
                         const regexInativas = /let inativas = (\[.*?\]);/;
+                        
                         const matchAtivas = script.textContent.match(regexAtivas);
                         const matchInativas = script.textContent.match(regexInativas);
+                        
                         if (matchAtivas && matchInativas) {
                             ativas = JSON.parse(matchAtivas[1]);
                             inativas = JSON.parse(matchInativas[1]);
@@ -494,10 +595,10 @@ if ($result) {
                         }
                     }
                 });
-            }).catch(err => console.error('Erro de sincronização de rotinas:', err));
+            }).catch(err => console.error('Erro de sincronização:', err));
     }
 
-    function activarEdicao(id, isInativa) {
+    function ativarEdicao(id, isInativa) {
         estaEditando = true;
         const listaOrigem = isInativa ? inativas : ativas;
         const tarefa = listaOrigem.find(t => t.id === id);
