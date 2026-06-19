@@ -1,4 +1,4 @@
-# Sistema de Gerenciamento de Chamados TI
+# Sistema de Gerenciamento de Chamados TI 
 
 Sistema web desenvolvido para o **gerenciamento de chamados de TI** e **solicitações de RH**, com painéis analíticos, checklist diário, notificações em tempo real e registro de atividades.
 
@@ -51,6 +51,7 @@ Ideal para órgãos públicos e equipes de suporte que precisam de um controle c
   - **Amarelo** → chamados/solicitações em atendimento.
 - **Comportamento adaptativo** – na sidebar recolhida, o badge se torna um pequeno ponto discreto sobre o ícone; na sidebar expandida (hover), exibe o número exato.
 - **Atualização dinâmica** – os badges são atualizados automaticamente a cada 5 segundos via polling, sem necessidade de recarregar a página.
+- **Logo com inversão automática** – a logo do sistema (código de barras) é invertida para branco no modo escuro, garantindo visibilidade em ambos os temas (usando CSS `filter: brightness(0) invert(1)`).
 
 ### 3. Melhoria no Gerenciador de RH
 - **Notificações na sidebar** – os badges para o módulo de RH seguem a mesma lógica de cores do módulo de chamados (verde para abertos, amarelo para em atendimento).
@@ -62,6 +63,7 @@ Ideal para órgãos públicos e equipes de suporte que precisam de um controle c
 - **Adaptação para PostgreSQL** – substituição de funções específicas do MySQL (`MONTH`, `YEAR`, `LIMIT X,Y`) por equivalentes do PostgreSQL (`EXTRACT`, `LIMIT OFFSET`).
 - **Uso de prepared statements** – todas as queries foram convertidas para prepared statements, eliminando riscos de injeção SQL.
 - **Correção de sintaxe** – ajuste de `fetch_assoc()` para `fetch(PDO::FETCH_ASSOC)` e `num_rows` para `rowCount()`.
+- **Criação de `login.php`** – arquivo que cria sessão padrão (Admin) e redireciona para o sistema, evitando erro 404 em redirecionamentos.
 
 ---
 
