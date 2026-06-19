@@ -108,7 +108,8 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
 ?>
 <div class="sidebar">
     <div class="sidebar-profile">
-        <img src="./imgs/icone.png" class="logo-sidebar" alt="Logo COREN-PE">
+        <!-- NOVA LOGO (código de barras) -->
+        <img src="./imgs/logo.png" class="logo-sidebar" alt="Logo">
         <div class="sidebar-user-info">
             <span class="sidebar-user-name" title="<?php echo htmlspecialchars($_SESSION['NOME'] ?? ''); ?>"><?php echo htmlspecialchars($_SESSION['NOME'] ?? ''); ?></span>
             <span class="sidebar-user-role"><?php echo htmlspecialchars($_SESSION['PERFIL'] ?? ''); ?></span>
@@ -260,6 +261,13 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
 }
 .sidebar .nav-link.checklist-done.active i.fa-clipboard-check {
     color: #2ECC71 !important;
+}
+
+/* ==========================================
+   INVERSÃO DA LOGO NO MODO ESCURO
+   ========================================== */
+[data-theme="dark"] .logo-sidebar {
+    filter: brightness(0) invert(1) !important;
 }
 </style>
 
