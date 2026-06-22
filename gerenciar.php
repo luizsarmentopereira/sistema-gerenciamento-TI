@@ -52,7 +52,6 @@ if ($result_setores) {
 }
 
 // Consulta principal com paginação e filtro
-// CORREÇÃO: PostgreSQL usa LIMIT X OFFSET Y em vez de LIMIT X,Y
 $sql = "SELECT c.*, a.nome AS atendente_nome, f.nome AS fechado_por_nome 
         FROM chamado c 
         LEFT JOIN users a ON c.atendente_id = a.id 
@@ -129,9 +128,6 @@ function truncateText($text, $length) {
             --primary-blue: #60a5fa;
         }
 
-        /* ============================================
-           COMPONENTES GERAIS (específicos desta página)
-        ============================================ */
         .card-gerenciador { 
             background: var(--bg-card);
             border-radius: 12px; 
@@ -158,7 +154,6 @@ function truncateText($text, $length) {
 
         .status-info { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
         
-        /* Filtros no Header */
         .card-header-gerenciador .input-group-text { 
             background-color: rgba(255,255,255,0.1); 
             border: 1px solid rgba(255,255,255,0.2); 
@@ -203,7 +198,6 @@ function truncateText($text, $length) {
         
         .user-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
-        /* Badges de status clicáveis */
         .status-btn { 
             cursor: pointer; 
             transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); 
@@ -237,7 +231,6 @@ function truncateText($text, $length) {
             padding: 12px 16px;
         }
 
-        /* Correção do texto das tooltips no modo escuro */
         .tooltip-inner {
             color: #ffffff !important;
         }
@@ -369,7 +362,14 @@ function truncateText($text, $length) {
                                                     <td><?= date('d/m/Y H:i', strtotime($chamado['data_hora'])) ?></td>
                                                     <td>
                                                         <?php
-                                                        $status_class = ['ABERTO' => 'bg-success', 'EM ATENDIMENTO' => 'bg-warning text-dark', 'FECHADO' => 'bg-danger'][$chamado['status']];
+                                                        // ✅ CORREÇÃO: dentro do loop, $chamado existe
+                                                        $status_class = [
+                                                            'ABERTO' => 'bg-success',
+                                                            'NOVO' => 'bg-success',
+                                                            'EM ATENDIMENTO' => 'bg-warning text-dark',
+                                                            'FECHADO' => 'bg-danger'
+                                                        ][$chamado['status']] ?? 'bg-secondary';
+
                                                         $status_info = '';
                                                         if ($chamado['status'] == 'EM ATENDIMENTO' && !empty($chamado['atendente_nome'])) {
                                                             $status_info = 'Atendente: ' . htmlspecialchars($chamado['atendente_nome']);
@@ -385,7 +385,24 @@ function truncateText($text, $length) {
                                                         </div>
                                                     </td>
                                                     <td>
+                                                        <?php
+                                                        // ✅ CORREÇÃO: arrays de botões dentro do loop
+                                                        $btn_text = [
+                                                            'ABERTO' => 'Atender',
+                                                            'NOVO' => 'Atender',
+                                                            'EM ATENDIMENTO' => 'Fechar',
+                                                            'FECHADO' => 'Reabrir'
+                                                        ][$chamado['status']] ?? 'Ação';
+
+                                                        $btn_class = [
+                                                            'ABERTO' => 'btn-primary',
+                                                            'NOVO' => 'btn-primary',
+                                                            'EM ATENDIMENTO' => 'btn-danger',
+                                                            'FECHADO' => 'btn-success'
+                                                        ][$chamado['status']] ?? 'btn-secondary';
+                                                        ?>
                                                         <div class="d-flex align-items-center gap-2">
+                                                            <!-- Botão de detalhes -->
                                                             <button class="btn btn-sm btn-outline-primary"
                                                                     onclick="carregarDetalhes(<?= $chamado['id'] ?>)"
                                                                     data-bs-toggle="modal"
@@ -393,16 +410,14 @@ function truncateText($text, $length) {
                                                                     title="Ver Detalhes">
                                                                 <i class="fas fa-eye"></i>
                                                             </button>
+                                                            <!-- Chat -->
                                                             <a href="acompanhar_chamado.php?id=<?= $chamado['id'] ?>"
                                                                target="_blank"
                                                                class="btn btn-sm btn-outline-info"
                                                                title="Abrir Chat do Chamado">
                                                                 <i class="fas fa-comments"></i>
                                                             </a>
-                                                            <?php
-                                                            $btn_text  = ['ABERTO' => 'Atender', 'EM ATENDIMENTO' => 'Fechar', 'FECHADO' => 'Reabrir'][$chamado['status']];
-                                                            $btn_class = ['ABERTO' => 'btn-primary', 'EM ATENDIMENTO' => 'btn-danger', 'FECHADO' => 'btn-success'][$chamado['status']];
-                                                            ?>
+                                                            <!-- Botão de ação (Atender/Fechar/Reabrir) -->
                                                             <a href="update_status.php?ID=<?= $chamado['id'] ?>&pagina=<?= $pagina_atual ?>&setor=<?= urlencode($filtro_setor) ?><?= $filtro_status ? '&status='.urlencode($filtro_status) : '' ?>"
                                                                class="btn btn-sm <?= $btn_class ?> btn-action">
                                                                 <?= $btn_text ?>
@@ -480,7 +495,7 @@ function truncateText($text, $length) {
                                         if ($res_chats && $res_chats->rowCount() > 0):
                                             $chats = $res_chats->fetchAll(PDO::FETCH_ASSOC);
                                             foreach ($chats as $chat_row):
-                                                $st_class = ['ABERTO' => 'bg-success', 'EM ATENDIMENTO' => 'bg-warning text-dark', 'FECHADO' => 'bg-danger'][$chat_row['status']];
+                                                $st_class = ['ABERTO' => 'bg-success', 'NOVO' => 'bg-success', 'EM ATENDIMENTO' => 'bg-warning text-dark', 'FECHADO' => 'bg-danger'][$chat_row['status']] ?? 'bg-secondary';
                                         ?>
                                             <tr>
                                                 <td class="fw-bold">#<?= $chat_row['id'] ?></td>
@@ -562,7 +577,6 @@ function truncateText($text, $length) {
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        // Sincroniza ícone/texto com o tema já aplicado pelo script inline no <head>
         const savedTheme = localStorage.getItem('theme') || 'light';
         if (savedTheme === 'dark') {
             const icon = document.getElementById('theme-icon');
@@ -571,7 +585,6 @@ function truncateText($text, $length) {
             if (text) text.innerText = 'Modo Claro';
         }
 
-        // Tooltips
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
 
         let lastId        = parseInt(document.getElementById('tabela-chamados').getAttribute('data-last-id')) || 0;
@@ -611,13 +624,11 @@ function truncateText($text, $length) {
                 if (!response.ok) return;
                 const data = await response.json();
                 
-                // Novo Chamado
                 if (data.has_new) {
                     showBrowserNotification('Novo Chamado!', 'Um novo chamado foi aberto ou a fila atualizou.');
                     lastId = data.new_id;
                 }
                 
-                // Nova Mensagem em Chat Existente
                 if (data.has_new_msg) {
                     showBrowserNotification('Nova Mensagem!', 'Há novas interações nos chats de atendimento.');
                     lastMsgId = data.new_msg_id;

@@ -139,11 +139,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-label">ADMINISTRAÇÃO</div>
         <li class="nav-item">
-            <a href="gerenciar_transferencias.php" class="nav-link <?= ($sidebar_active_page == 'gerenciar_transferencias.php') ? 'active' : '' ?>">
-                <i class="fas fa-exchange-alt"></i><span>Gerenciar Transf.</span>
-            </a>
-        </li>
-        <li class="nav-item">
             <a href="gerenciar_rh.php" class="nav-link <?= ($sidebar_active_page == 'gerenciar_rh.php') ? 'active' : '' ?>">
                 <i class="fas fa-users-cog"></i><span>Gerenciar RH</span>
                 <?php if ($badge_rh_num > 0): ?>
@@ -152,11 +147,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <?php if(isset($_SESSION['PERFIL']) && ($_SESSION['PERFIL'] == "ADMINISTRADOR" || $_SESSION['PERFIL'] == "MASTER")): ?>
-        <li class="nav-item">
-            <a href="cadastrar.php" class="nav-link <?= ($sidebar_active_page == 'cadastrar.php') ? 'active' : '' ?>">
-                <i class="fas fa-user-plus"></i><span>Cadastrar Usuário</span>
-            </a>
-        </li>
         <?php endif; ?>
     </ul>
     <div class="sidebar-bottom">

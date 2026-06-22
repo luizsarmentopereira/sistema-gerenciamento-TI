@@ -204,7 +204,7 @@ if ($stmt) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Checklist - COREN-PE</title>
+    <title>Checklist Diário</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="shortcut icon" href="./imgs/icone.png" type="image/x-icon">
@@ -340,7 +340,8 @@ if ($stmt) {
             <?php include 'menu.php'; ?>
             <div class="content p-4 w-100">
                 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-                    <h2><i class="fas fa-clipboard-check me-2"></i> Checklist Diário - DTI</h2>
+                    <h2 class="mb-0 fw-bold header-title-clean">
+                        <i class="fas fa-clipboard-check text-primary me-2"></i> Checklist Diário - DTI</h2>
                 <div class="badge bg-secondary fs-6 p-2" id="current-date"><i class="far fa-calendar-alt me-2"></i><span></span></div>
             </div>
 
