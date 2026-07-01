@@ -4,7 +4,7 @@ if (!isset($conn)) {
     include_once('conexao.php');
 }
 
-// ===== FUNÇÕES DE CONTAGEM (para carregamento inicial) =====
+// ===== FUNÇÕES DE CONTAGEM =====
 function totalAbertosChamados($conn) {
     $sql = "SELECT COUNT(*) as total FROM chamado WHERE status IN ('ABERTO', 'NOVO')";
     $result = $conn->query($sql);
@@ -41,36 +41,48 @@ function totalEmAtendimentoRh($conn) {
     return $row['total'] ?? 0;
 }
 
+// ============================================================
+// FUNÇÃO CORRIGIDA: ícone verde somente quando todas as tarefas
+// do dia estiverem realmente concluídas (ignora tarefas sem data)
+// ============================================================
 function todasTarefasConcluidasHoje($conn) {
     $hoje = date('Y-m-d');
-    $dia_semana = date('N');
+    $dia_semana = date('N'); // 1=Segunda ... 7=Domingo
     $dia_mes = date('j');
     $agenda_mes = 'm-' . $dia_mes;
 
-    $sql_count = "SELECT COUNT(*) as total 
+    // 1. Conta total de tarefas programadas para hoje (baseado no agendamento)
+    $sql_total = "SELECT COUNT(*) as total 
                   FROM checklist_tarefas 
-                  WHERE data_modificacao = :hoje
-                    AND (agendamento = 'todos' 
-                         OR agendamento = :dia_semana 
-                         OR agendamento = :agenda_mes)";
-    $stmt = $conn->prepare($sql_count);
-    $stmt->execute(['hoje' => $hoje, 'dia_semana' => $dia_semana, 'agenda_mes' => $agenda_mes]);
-    $total = $stmt->fetchColumn();
-    if ($total == 0) return true;
+                  WHERE agendamento = 'todos' 
+                     OR agendamento = :dia_semana 
+                     OR agendamento = :agenda_mes";
+    $stmt_total = $conn->prepare($sql_total);
+    $stmt_total->execute(['dia_semana' => $dia_semana, 'agenda_mes' => $agenda_mes]);
+    $total = (int) $stmt_total->fetchColumn();
 
+    // Se não houver tarefas para hoje, retorna false (ícone não fica verde)
+    if ($total == 0) return false;
+
+    // 2. Conta quantas dessas tarefas foram concluídas hoje
     $sql_done = "SELECT COUNT(*) as done 
                  FROM checklist_tarefas 
-                 WHERE data_modificacao = :hoje
-                   AND (agendamento = 'todos' 
+                 WHERE (agendamento = 'todos' 
                         OR agendamento = :dia_semana 
                         OR agendamento = :agenda_mes)
-                   AND concluida = true";
-    $stmt = $conn->prepare($sql_done);
-    $stmt->execute(['hoje' => $hoje, 'dia_semana' => $dia_semana, 'agenda_mes' => $agenda_mes]);
-    $done = $stmt->fetchColumn();
+                   AND concluida = true
+                   AND data_modificacao = :hoje";
+    $stmt_done = $conn->prepare($sql_done);
+    $stmt_done->execute([
+        'dia_semana' => $dia_semana,
+        'agenda_mes' => $agenda_mes,
+        'hoje' => $hoje
+    ]);
+    $done = (int) $stmt_done->fetchColumn();
 
     return $done == $total;
 }
+// ============================================================
 
 // ===== CÁLCULO DOS BADGES (carregamento inicial) =====
 $total_abertos_chamados = totalAbertosChamados($conn);
@@ -108,7 +120,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
 ?>
 <div class="sidebar">
     <div class="sidebar-profile">
-        <!-- NOVA LOGO (código de barras) -->
         <img src="./imgs/logo.png" class="logo-sidebar" alt="Logo">
         <div class="sidebar-user-info">
             <span class="sidebar-user-name" title="<?php echo htmlspecialchars($_SESSION['NOME'] ?? ''); ?>"><?php echo htmlspecialchars($_SESSION['NOME'] ?? ''); ?></span>
@@ -139,6 +150,11 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-label">ADMINISTRAÇÃO</div>
         <li class="nav-item">
+            <a href="gerenciar_transferencias.php" class="nav-link <?= ($sidebar_active_page == 'gerenciar_transferencias.php') ? 'active' : '' ?>">
+                <i class="fas fa-exchange-alt"></i><span>Gerenciar Transf.</span>
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="gerenciar_rh.php" class="nav-link <?= ($sidebar_active_page == 'gerenciar_rh.php') ? 'active' : '' ?>">
                 <i class="fas fa-users-cog"></i><span>Gerenciar RH</span>
                 <?php if ($badge_rh_num > 0): ?>
@@ -147,6 +163,11 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <?php if(isset($_SESSION['PERFIL']) && ($_SESSION['PERFIL'] == "ADMINISTRADOR" || $_SESSION['PERFIL'] == "MASTER")): ?>
+        <li class="nav-item">
+            <a href="cadastrar.php" class="nav-link <?= ($sidebar_active_page == 'cadastrar.php') ? 'active' : '' ?>">
+                <i class="fas fa-user-plus"></i><span>Cadastrar Usuário</span>
+            </a>
+        </li>
         <?php endif; ?>
     </ul>
     <div class="sidebar-bottom">
@@ -171,9 +192,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
 </div>
 
 <style>
-/* ==========================================
-   BADGE DE NOTIFICAÇÃO
-   ========================================== */
 .sidebar .nav-link {
     position: relative;
     display: flex;
@@ -183,8 +201,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
     flex: 1;
     white-space: nowrap;
 }
-
-/* Estado recolhido (padrão) */
 .badge-notif {
     position: absolute !important;
     top: 2px !important;
@@ -212,8 +228,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
     background: #ffc107 !important;
     color: #212529 !important;
 }
-
-/* Estado expandido (hover) */
 .sidebar:hover .badge-notif {
     position: relative !important;
     top: auto !important;
@@ -236,9 +250,6 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
     color: #212529 !important;
 }
 
-/* ==========================================
-   ÍCONE DO CHECKLIST - VERDE VIVO
-   ========================================== */
 .sidebar .nav-link i.fa-clipboard-check {
     color: rgba(255, 255, 255, 0.8);
     transition: color 0.3s ease;
@@ -253,18 +264,12 @@ $sidebar_active_page = basename($_SERVER['PHP_SELF']);
     color: #2ECC71 !important;
 }
 
-/* ==========================================
-   INVERSÃO DA LOGO NO MODO ESCURO
-   ========================================== */
 [data-theme="dark"] .logo-sidebar {
     filter: brightness(0) invert(1) !important;
 }
 </style>
 
 <script>
-// ==========================================
-// ATUALIZAÇÃO EM TEMPO REAL (POLLING)
-// ==========================================
 function atualizarSidebar() {
     fetch('get_notificacoes.php')
         .then(response => {
@@ -272,7 +277,6 @@ function atualizarSidebar() {
             return response.json();
         })
         .then(data => {
-            // Atualiza badge de Chamados
             const badgeChamados = document.getElementById('badge-chamados');
             if (badgeChamados) {
                 const total = data.chamados.abertos + data.chamados.em_atendimento;
@@ -287,13 +291,11 @@ function atualizarSidebar() {
                     badgeChamados.parentElement.removeChild(badgeChamados);
                 }
             } else {
-                // Se não existir badge e houver notificações, recarregar a página para criar o elemento
                 if (data.chamados.abertos > 0 || data.chamados.em_atendimento > 0) {
                     location.reload();
                 }
             }
 
-            // Atualiza badge de RH
             const badgeRh = document.getElementById('badge-rh');
             if (badgeRh) {
                 const total = data.rh.abertos + data.rh.em_atendimento;
@@ -313,7 +315,6 @@ function atualizarSidebar() {
                 }
             }
 
-            // Atualiza classe do Checklist
             const linkChecklist = document.getElementById('link-checklist');
             if (linkChecklist) {
                 if (data.checklist_done) {
@@ -323,18 +324,14 @@ function atualizarSidebar() {
                 }
             }
         })
-        .catch(error => {
-            console.warn('Erro ao atualizar sidebar:', error);
-        });
+        .catch(error => console.warn('Erro ao atualizar sidebar:', error));
 }
 
-// Inicia o polling a cada 5 segundos
 document.addEventListener('DOMContentLoaded', function() {
     atualizarSidebar();
     setInterval(atualizarSidebar, 5000);
 });
 
-// Função toggleTheme (mantida)
 function toggleTheme() {
     const doc = document.documentElement;
     const icon = document.getElementById('theme-icon');

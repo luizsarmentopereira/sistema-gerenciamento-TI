@@ -9,6 +9,7 @@ if (!isset($_SESSION['ID'])) {
 
 include_once('conexao.php');
 
+// ===== FUNÇÕES DE CONTAGEM (cópia da lógica do menu.php) =====
 function totalAbertosChamados($conn) {
     $sql = "SELECT COUNT(*) as total FROM chamado WHERE status IN ('ABERTO', 'NOVO')";
     $result = $conn->query($sql);
@@ -45,37 +46,46 @@ function totalEmAtendimentoRh($conn) {
     return $row['total'] ?? 0;
 }
 
+// ============================================================
+// FUNÇÃO CORRIGIDA (idêntica à do menu.php)
+// ============================================================
 function todasTarefasConcluidasHoje($conn) {
     $hoje = date('Y-m-d');
     $dia_semana = date('N');
     $dia_mes = date('j');
     $agenda_mes = 'm-' . $dia_mes;
 
-    $sql_count = "SELECT COUNT(*) as total 
+    $sql_total = "SELECT COUNT(*) as total 
                   FROM checklist_tarefas 
-                  WHERE data_modificacao = :hoje
-                    AND (agendamento = 'todos' 
-                         OR agendamento = :dia_semana 
-                         OR agendamento = :agenda_mes)";
-    $stmt = $conn->prepare($sql_count);
-    $stmt->execute(['hoje' => $hoje, 'dia_semana' => $dia_semana, 'agenda_mes' => $agenda_mes]);
-    $total = $stmt->fetchColumn();
-    if ($total == 0) return true;
+                  WHERE agendamento = 'todos' 
+                     OR agendamento = :dia_semana 
+                     OR agendamento = :agenda_mes";
+    $stmt_total = $conn->prepare($sql_total);
+    $stmt_total->execute(['dia_semana' => $dia_semana, 'agenda_mes' => $agenda_mes]);
+    $total = (int) $stmt_total->fetchColumn();
+
+    if ($total == 0) return false;
 
     $sql_done = "SELECT COUNT(*) as done 
                  FROM checklist_tarefas 
-                 WHERE data_modificacao = :hoje
-                   AND (agendamento = 'todos' 
+                 WHERE (agendamento = 'todos' 
                         OR agendamento = :dia_semana 
                         OR agendamento = :agenda_mes)
-                   AND concluida = true";
-    $stmt = $conn->prepare($sql_done);
-    $stmt->execute(['hoje' => $hoje, 'dia_semana' => $dia_semana, 'agenda_mes' => $agenda_mes]);
-    $done = $stmt->fetchColumn();
+                   AND concluida = true
+                   AND data_modificacao = :hoje";
+    $stmt_done = $conn->prepare($sql_done);
+    $stmt_done->execute([
+        'dia_semana' => $dia_semana,
+        'agenda_mes' => $agenda_mes,
+        'hoje' => $hoje
+    ]);
+    $done = (int) $stmt_done->fetchColumn();
 
     return $done == $total;
 }
+// ============================================================
 
+// ===== CALCULAR DADOS =====
 $total_abertos_chamados = totalAbertosChamados($conn);
 $total_em_atendimento_chamados = totalEmAtendimentoChamados($conn);
 $total_abertos_rh = totalAbertosRh($conn);
